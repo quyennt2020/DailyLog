@@ -1,0 +1,545 @@
+<!-- Save as: engineer-work-log-fixedv40.html -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Engineer Work Log - PWA</title>
+    <meta name="description" content="Ứng dụng log công việc cho kỹ sư" />
+    <meta name="theme-color" content="#2563eb" />
+    <style>
+        /* (CSS kept compact but similar to original) */
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;color:#333}
+        .container{max-width:1200px;margin:0 auto;padding:20px}
+        .header{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-radius:15px;padding:25px;margin-bottom:25px;box-shadow:0 8px 32px rgba(0,0,0,0.1);text-align:center}
+        .header h1{color:#2563eb;font-size:2rem;margin-bottom:6px}
+        .work-log-form,.work-log-table{background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-radius:15px;padding:20px;margin-bottom:20px;box-shadow:0 8px 32px rgba(0,0,0,0.1)}
+        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:12px}
+        .form-group{display:flex;flex-direction:column}
+        label{font-weight:600;color:#374151;margin-bottom:6px;font-size:0.9rem}
+        input,select,textarea{padding:10px;border:2px solid #e5e7eb;border-radius:8px;font-size:1rem;background:rgba(255,255,255,0.9)}
+        .btn{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;padding:10px 16px;border-radius:10px;border:none;cursor:pointer}
+        .btn-secondary{background:linear-gradient(135deg,#6b7280,#9ca3af)}
+        .btn-scanner{background:#059669;color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer}
+        table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden}
+        th{background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;padding:10px;text-align:left}
+        td{padding:8px;border-bottom:1px solid #f3f4f6}
+        .scanner-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:2000;align-items:center;justify-content:center}
+        .scanner-container{background:#fff;border-radius:12px;padding:18px;width:90%;max-width:520px;max-height:90%;display:flex;flex-direction:column;gap:12px}
+        .scanner-video{width:100%;height:300px;object-fit:cover;border-radius:8px;background:#000}
+        .scanner-overlay{position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.3);border:2px solid #10b981;border-radius:8px;width:80%;height:100px;left:50%;top:50%;transform:translate(-50%,-50%)}
+        .scanner-status{color:#6b7280;text-align:center;min-height:20px}
+        .scanner-result{display:none;background:#f0fdf4;border:2px solid #10b981;padding:12px;border-radius:8px}
+        .toast{position:fixed;right:20px;top:20px;background:#111;color:#fff;padding:10px 14px;border-radius:8px;opacity:0;transform:translateY(-10px);transition:opacity .25s,transform .25s;z-index:3000}
+        .toast.show{opacity:1;transform:translateY(0)}
+        @media(max-width:768px){.scanner-video{height:220px}}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Engineer Work Log</h1>
+            <p>Hệ thống quản lý công việc kỹ sư</p>
+        </div>
+
+        <div class="work-log-form">
+            <form id="workLogForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="date">Ngày</label>
+                        <input type="date" id="date" name="date" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="workType">Loại công việc</label>
+                        <select id="workType" name="workType" required>
+                            <option value="">Chọn loại công việc</option>
+                            <option value="Sửa chữa">Sửa chữa</option>
+                            <option value="Bảo trì PM">Bảo trì PM</option>
+                            <option value="Lắp mới">Lắp mới</option>
+                            <option value="Đào tạo">Đào tạo</option>
+                            <option value="Kiểm tra">Kiểm tra</option>
+                            <option value="Khác">Khác</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="equipment">Thiết bị / Nội dung</label>
+                        <div style="display:flex;gap:8px;align-items:stretch">
+                            <input type="text" id="equipment" name="equipment" placeholder="VD: TE-171 lỗi motor bơm" required style="flex:1" />
+                            <button type="button" id="barcodeScannerBtn" class="btn-scanner" title="Quét barcode">📷</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="location">Địa điểm</label>
+                        <input type="text" id="location" name="location" placeholder="VD: Bệnh viện, Văn phòng" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="hours">Thời gian (giờ)</label>
+                        <input type="number" id="hours" name="hours" step="0.1" min="0" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Trạng thái</label>
+                        <select id="status" name="status" required>
+                            <option value="">Chọn trạng thái</option>
+                            <option value="Hoàn thành">Hoàn thành</option>
+                            <option value="Đang làm">Đang làm</option>
+                            <option value="Chờ xử lý">Chờ xử lý</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="notes">Ghi chú</label>
+                    <textarea id="notes" name="notes" rows="3" placeholder="Ghi chú..."></textarea>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+                    <button type="button" class="btn-secondary btn" onclick="clearForm()">Xóa form</button>
+                    <button type="submit" class="btn">Thêm công việc</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="work-log-table">
+            <h2>Danh sách công việc</h2>
+            <div style="overflow:auto;margin-top:12px">
+                <table id="workLogTable">
+                    <thead>
+                        <tr>
+                            <th>Ngày</th><th>Loại</th><th>Thiết bị/Nội dung</th><th>Địa điểm</th><th>Thời gian</th><th>Trạng thái</th><th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody id="workLogTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scanner Modal -->
+    <div id="barcodeScanner" class="scanner-modal" aria-hidden="true">
+        <div class="scanner-container" role="dialog" aria-modal="true">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong>📷 Quét Barcode</strong>
+                <button id="scannerCloseBtn" class="btn-secondary btn">×</button>
+            </div>
+            <div style="position:relative">
+                <video id="scannerVideo" class="scanner-video" autoplay muted playsinline></video>
+                <div class="scanner-overlay" aria-hidden="true"></div>
+            </div>
+            <div class="scanner-status" id="scannerStatus">Đang khởi động camera... Đưa mã vạch vào khung hình.</div>
+            <div id="scannerResult" class="scanner-result" aria-hidden="true">
+                <div style="font-family:monospace;font-weight:600" id="scannerResultText"></div>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button id="useBarcodeBtn" class="btn">✅ Sử dụng</button>
+                    <button id="scanAgainBtn" class="btn-secondary btn">🔄 Quét lại</button>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+                <button id="toggleManualBtn" class="btn-secondary btn">⌨️ Nhập thủ công</button>
+                <button id="toggleImageBtn" class="btn-secondary btn">🖼️ Quét từ ảnh</button>
+                <button id="cancelScannerBtn" class="btn-secondary btn">❌ Hủy</button>
+            </div>
+            <div id="scannerManualInput" style="display:none;margin-top:8px">
+                <input id="manualBarcodeInput" placeholder="Nhập mã thủ công (chữ, số, hoặc -_/)" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;font-family:monospace" />
+                <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+                    <button id="useManualBtn" class="btn">✅ Sử dụng</button>
+                    <button id="backToCameraBtn" class="btn-secondary btn">📷 Quay lại camera</button>
+                </div>
+            </div>
+            <div id="scannerImageInput" style="display:none;margin-top:8px">
+                <input type="file" id="imageFileInput" accept="image/*" style="width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:8px;" />
+                <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+                    <button id="scanImageBtn" class="btn">✅ Quét ảnh</button>
+                    <button id="backToCameraFromImageBtn" class="btn-secondary btn">📷 Quay lại camera</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <!-- Hidden canvas for image scanning -->
+    <canvas id="scannerCanvas" style="display:none;"></canvas>
+
+    <!-- ZXing JS Library -->
+    <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
+
+    <script>
+        /************************************************************************
+         * Full working implementation including barcode scanner support
+         * - Uses ZXing for barcode scanning from camera and image
+         * - Keeps simple work log storage in localStorage
+         * - Improved error handling and barcode validation
+         * - Added image scan functionality with enhanced error checking
+         ************************************************************************/
+
+        // --- Simple toast notification ---
+        function showNotification(message, type='info', timeout=3000) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            if (type === 'success') toast.style.background = '#059669';
+            else if (type === 'error') toast.style.background = '#ef4444';
+            else if (type === 'info') toast.style.background = '#111';
+            else toast.style.background = '#111';
+            toast.classList.add('show');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => toast.classList.remove('show'), timeout);
+        }
+
+        // --- Work log basic logic (kept minimal) ---
+        let workLogs = JSON.parse(localStorage.getItem('workLogs') || '[]');
+
+        function renderWorkLogs() {
+            const tbody = document.getElementById('workLogTableBody');
+            tbody.innerHTML = '';
+            workLogs.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.date}</td>
+                                <td>${item.workType}</td>
+                                <td>${escapeHtml(item.equipment)}</td>
+                                <td>${escapeHtml(item.location)}</td>
+                                <td>${item.hours}</td>
+                                <td>${item.status}</td>
+                                <td>${escapeHtml(item.notes||'')}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function escapeHtml(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+        document.getElementById('workLogForm').addEventListener('submit', function(e){
+            e.preventDefault();
+            const item = {
+                date: document.getElementById('date').value,
+                workType: document.getElementById('workType').value,
+                equipment: document.getElementById('equipment').value,
+                location: document.getElementById('location').value,
+                hours: document.getElementById('hours').value,
+                status: document.getElementById('status').value,
+                notes: document.getElementById('notes').value
+            };
+            workLogs.unshift(item);
+            localStorage.setItem('workLogs', JSON.stringify(workLogs));
+            renderWorkLogs();
+            showNotification('✅ Đã thêm công việc', 'success');
+            this.reset();
+            // set date to today again
+            document.getElementById('date').valueAsDate = new Date();
+        });
+
+        function clearForm(){
+            document.getElementById('workLogForm').reset();
+            document.getElementById('date').valueAsDate = new Date();
+        }
+
+        // Initialize date field
+        document.addEventListener('DOMContentLoaded', function(){
+            document.getElementById('date').valueAsDate = new Date();
+            renderWorkLogs();
+        });
+
+        /******************************
+         * Barcode scanner functionality with ZXing
+         ******************************/
+        // scanner state
+        const barcodeScanner = {
+            stream: null,        // MediaStream from getUserMedia
+            isActive: false,     // whether scanner is active
+            lastResult: null     // last scanned code (string)
+        };
+
+        // UI elements
+        const scannerModal = document.getElementById('barcodeScanner');
+        const scannerVideo = document.getElementById('scannerVideo');
+        const scannerStatus = document.getElementById('scannerStatus');
+        const scannerResult = document.getElementById('scannerResult');
+        const scannerResultText = document.getElementById('scannerResultText');
+        const scannerManualInput = document.getElementById('scannerManualInput');
+        const scannerImageInput = document.getElementById('scannerImageInput');
+        const imageFileInput = document.getElementById('imageFileInput');
+        const scannerCanvas = document.getElementById('scannerCanvas');
+
+        // Attach listeners to buttons
+        document.getElementById('barcodeScannerBtn').addEventListener('click', openBarcodeScanner);
+        document.getElementById('scannerCloseBtn').addEventListener('click', closeBarcodeScanner);
+        document.getElementById('cancelScannerBtn').addEventListener('click', closeBarcodeScanner);
+        document.getElementById('scanAgainBtn').addEventListener('click', scanAgain);
+        document.getElementById('useBarcodeBtn').addEventListener('click', useBarcodeResult);
+        document.getElementById('toggleManualBtn').addEventListener('click', toggleManualInput);
+        document.getElementById('useManualBtn').addEventListener('click', useManualBarcode);
+        document.getElementById('backToCameraBtn').addEventListener('click', backToCamera);
+        document.getElementById('toggleImageBtn').addEventListener('click', toggleImageInput);
+        document.getElementById('scanImageBtn').addEventListener('click', scanFromImage);
+        document.getElementById('backToCameraFromImageBtn').addEventListener('click', backToCamera);
+
+        // Open scanner modal and initialize camera
+        function openBarcodeScanner() {
+            // Check ZXing loaded
+            if (typeof ZXing === 'undefined') {
+                showNotification('❌ Không thể tải thư viện quét barcode. Kiểm tra kết nối mạng.', 'error', 5000);
+                console.error('ZXing not loaded. Check CDN availability or network connection.');
+                return;
+            }
+
+            // Check getUserMedia
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showNotification('❌ Thiết bị không hỗ trợ camera.', 'error', 5000);
+                console.error('getUserMedia not supported on this device.');
+                return;
+            }
+
+            // Show modal
+            scannerModal.style.display = 'flex';
+            scannerModal.setAttribute('aria-hidden', 'false');
+            scannerResult.style.display = 'none';
+            scannerManualInput.style.display = 'none';
+            scannerImageInput.style.display = 'none';
+            scannerStatus.textContent = 'Đang khởi động camera... Đưa mã vạch vào khung hình.';
+
+            // Start camera
+            initializeCamera();
+        }
+
+        // Close scanner modal, stop camera
+        function closeBarcodeScanner() {
+            scannerModal.style.display = 'none';
+            scannerModal.setAttribute('aria-hidden', 'true');
+            stopCamera();
+            resetScannerUI();
+        }
+
+        // Initialize camera (getUserMedia) & attach stream to video element
+        async function initializeCamera() {
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    },
+                    audio: false
+                };
+
+                // Stop existing stream first
+                stopCamera();
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                barcodeScanner.stream = stream;
+                scannerVideo.srcObject = stream;
+                scannerVideo.play().catch(err => console.error('Error playing video:', err));
+
+                // Start scanning from camera
+                startCameraScanning();
+
+            } catch (err) {
+                console.error('Error initializing camera:', err.name, err.message);
+                scannerStatus.textContent = '❌ Không thể truy cập camera. Vui lòng kiểm tra quyền hoặc thử thiết bị khác.';
+                showNotification('❌ Không thể truy cập camera. Kiểm tra quyền/thiết bị.', 'error', 5000);
+            }
+        }
+
+        // Stop the camera stream
+        function stopCamera() {
+            barcodeScanner.isActive = false;
+            if (barcodeScanner.stream) {
+                barcodeScanner.stream.getTracks().forEach(track => track.stop());
+                barcodeScanner.stream = null;
+            }
+            scannerVideo.pause();
+            scannerVideo.srcObject = null;
+        }
+
+        // Start scanning from camera using ZXing
+        function startCameraScanning() {
+            barcodeScanner.isActive = true;
+            const codeReader = new ZXing.BrowserMultiFormatReader();
+            codeReader.decodeFromVideoDevice(null, 'scannerVideo', (result, err) => {
+                if (result && result.text) {
+                    const code = result.text;
+                    if (isValidBarcode(code)) {
+                        barcodeScanner.lastResult = code;
+                        scannerResultText.textContent = code;
+                        scannerResult.style.display = 'block';
+                        scannerStatus.textContent = '✅ Đã phát hiện mã';
+                        barcodeScanner.isActive = false;
+                    }
+                }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error('ZXing camera error:', err);
+                }
+                if (barcodeScanner.isActive) {
+                    requestAnimationFrame(() => startCameraScanning()); // Continue scanning
+                }
+            }).catch(err => {
+                console.error('ZXing init error:', err);
+                scannerStatus.textContent = '❌ Lỗi khởi tạo bộ quét. Vui lòng thử lại.';
+                showNotification('❌ Lỗi khởi tạo bộ quét.', 'error', 5000);
+            });
+        }
+
+        // Scan from uploaded image using ZXing
+        function scanFromImage() {
+            const file = imageFileInput.files[0];
+            if (!file) {
+                showNotification('❌ Vui lòng chọn ảnh để quét.', 'error', 3000);
+                return;
+            }
+            scannerStatus.textContent = 'Đang quét barcode từ ảnh...';
+            const codeReader = new ZXing.BrowserMultiFormatReader();
+            codeReader.decodeFromImageUrl(URL.createObjectURL(file)).then(result => {
+                if (result && result.text) {
+                    const code = result.text;
+                    if (isValidBarcode(code)) {
+                        barcodeScanner.lastResult = code;
+                        scannerResultText.textContent = code;
+                        scannerResult.style.display = 'block';
+                        scannerStatus.textContent = '✅ Đã phát hiện mã từ ảnh';
+                    } else {
+                        scannerStatus.textContent = '❌ Mã vạch không hợp lệ. Vui lòng thử ảnh khác.';
+                        showNotification('❌ Mã vạch không hợp lệ.', 'error', 3000);
+                    }
+                } else {
+                    scannerStatus.textContent = '❌ Không tìm thấy barcode trong ảnh. Vui lòng thử ảnh rõ nét hơn.';
+                    showNotification('❌ Không tìm thấy barcode trong ảnh.', 'error', 3000);
+                }
+            }).catch(err => {
+                console.error('ZXing image scan error:', err);
+                scannerStatus.textContent = '❌ Lỗi khi quét ảnh. Kiểm tra console để biết thêm chi tiết.';
+                showNotification('❌ Lỗi khi quét ảnh.', 'error', 5000);
+            });
+        }
+
+        // Validate barcode format
+        function isValidBarcode(code) {
+            if (!code) return false;
+            const validPattern = /^[a-zA-Z0-9-_/() ]+$/; // Allow spaces and parentheses for GS1 format
+            return validPattern.test(code) && code.length >= 4 && code.length <= 100;
+        }
+
+        // Use the last barcode result and fill the equipment field
+        function useBarcodeResult() {
+            const code = barcodeScanner.lastResult;
+            if (!code) {
+                showNotification('❌ Không có kết quả để sử dụng', 'error', 3000);
+                return;
+            }
+            const cleaned = parseBarcodeResult(code);
+            if (!isValidBarcode(cleaned)) {
+                showNotification('❌ Mã vạch không hợp lệ.', 'error', 3000);
+                return;
+            }
+            document.getElementById('equipment').value = cleaned;
+            document.getElementById('equipment').dispatchEvent(new Event('input', { bubbles: true }));
+            showNotification(`✅ Đã quét thành công: ${cleaned}`, 'success');
+            closeBarcodeScanner();
+            setTimeout(() => { document.getElementById('location').focus(); }, 150);
+        }
+
+        // Scan again (restart camera scanning)
+        function scanAgain() {
+            scannerResult.style.display = 'none';
+            scannerStatus.textContent = '📷 Sẵn sàng quét - Đưa mã vạch vào khung hình.';
+            barcodeScanner.lastResult = null;
+            startCameraScanning();
+        }
+
+        // Toggle manual input UI
+        function toggleManualInput() {
+            const manual = document.getElementById('scannerManualInput');
+            const videoContainer = scannerVideo.parentElement;
+            const instructions = scannerStatus;
+            if (!manual) return;
+            if (manual.style.display === 'none' || manual.style.display === '') {
+                manual.style.display = 'block';
+                videoContainer.style.display = 'none';
+                instructions.style.display = 'none';
+                barcodeScanner.isActive = false;
+                if (barcodeScanner.stream) {
+                    barcodeScanner.stream.getTracks().forEach(t => t.stop());
+                    barcodeScanner.stream = null;
+                }
+                document.getElementById('manualBarcodeInput').focus();
+            } else {
+                backToCamera();
+            }
+        }
+
+        // Toggle image input UI
+        function toggleImageInput() {
+            const imageInput = document.getElementById('scannerImageInput');
+            const videoContainer = scannerVideo.parentElement;
+            const instructions = scannerStatus;
+            if (!imageInput) return;
+            if (imageInput.style.display === 'none' || imageInput.style.display === '') {
+                imageInput.style.display = 'block';
+                videoContainer.style.display = 'none';
+                instructions.style.display = 'none';
+                barcodeScanner.isActive = false;
+                if (barcodeScanner.stream) {
+                    barcodeScanner.stream.getTracks().forEach(t => t.stop());
+                    barcodeScanner.stream = null;
+                }
+            } else {
+                backToCamera();
+            }
+        }
+
+        // Back to camera view from manual or image input
+        function backToCamera() {
+            scannerManualInput.style.display = 'none';
+            scannerImageInput.style.display = 'none';
+            scannerVideo.parentElement.style.display = '';
+            scannerStatus.style.display = '';
+            initializeCamera();
+        }
+
+        // Use manual barcode input value
+        function useManualBarcode() {
+            const v = document.getElementById('manualBarcodeInput').value.trim();
+            if (!v) {
+                showNotification('❌ Vui lòng nhập mã barcode', 'error', 3000);
+                return;
+            }
+            if (!isValidBarcode(v)) {
+                showNotification('❌ Mã vạch không hợp lệ. Chỉ dùng chữ, số, hoặc -_/.', 'error', 3000);
+                return;
+            }
+            barcodeScanner.lastResult = v;
+            useBarcodeResult();
+        }
+
+        // Parse/clean barcode strings (trim, remove non-printable chars)
+        function parseBarcodeResult(code) {
+            if (!code) return '';
+            return String(code).trim().replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+        }
+
+        // Reset scanner UI (called when closing)
+        function resetScannerUI() {
+            barcodeScanner.lastResult = null;
+            scannerResult.style.display = 'none';
+            scannerResultText.textContent = '';
+            scannerStatus.textContent = 'Đang khởi động camera... Đưa mã vạch vào khung hình.';
+            scannerManualInput.style.display = 'none';
+            scannerImageInput.style.display = 'none';
+            const mi = document.getElementById('manualBarcodeInput');
+            if (mi) mi.value = '';
+            const fi = document.getElementById('imageFileInput');
+            if (fi) fi.value = '';
+        }
+
+        // Accessibility: close scanner on Escape
+        window.addEventListener('keydown', function(e){
+            if (e.key === 'Escape' && scannerModal.style.display === 'flex') {
+                closeBarcodeScanner();
+            }
+        });
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+        });
+
+        // End of script
+    </script>
+</body>
+</html>
